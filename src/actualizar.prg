@@ -1,21 +1,12 @@
-* Definir variables de entorno para conexion (nombre de ODBC)
-* Definir env OR file config de tablas a actualizar
-* Documentar
-* ----------------------------------------------------
-* - Verificar existencia de campo marca de tiempo en las tablas (Local)
-* - Verificar marcas de tiempo vacias en tablas
 * - Copiar registros inexistentes en tabla remota
-
-*CREATE CURSOR tablaLocal
-
-*CREATE CURSOR tablaRemota
+* - Eliminar registros inexistentes en tabla local a remota
 
 *
 * Numero de tablas a actualizar
 *
 * var (Numerico)
 *
-nCantidadTablas = 5
+nCantidadTablas = 1
 
 *
 * Tablas a actualizar
@@ -23,6 +14,20 @@ nCantidadTablas = 5
 * var (Array)
 *
 DECLARE aTablas (nCantidadTablas)
+
+*
+* Numero de columnas a actualizar
+*
+* var (Numerico)
+*
+nCantidadColumnas = 10
+
+*
+* Columnas a actualizar
+*
+* var (Array)
+*
+DECLARE aColumnas (nCantidadColumnas)
 
 *
 * Identificador de conexion remota
@@ -45,7 +50,7 @@ IF NOT existenLasTablas() THEN
 	salir()
 ENDIF
 
-&& CONTINUAR AQUI
+actualizarRegistrosRemotos()
 
 salir()
 
@@ -64,8 +69,10 @@ ENDFUNC
 * Retorno (void)
 *
 FUNCTION obtenerTablas
+
 	aTablas(1) = 'datos'
-	aTablas(2) = 'record'
+	* aTablas(2) = 'record'
+	
 ENDFUNC
 
 *
@@ -136,6 +143,88 @@ ENDFUNC
 *
 FUNCTION rellenarMarcasRestantes
 	REPLACE update_at WITH DATETIME() WHILE EMPTY(update_at)
+ENDFUNC
+
+*
+* Actualizar registros desactualizados en tabla remota
+*
+* Retorno (void)
+*
+FUNCTION actualizarRegistrosRemotos
+
+	FOR EACH tablaLocal IN aTablas
+		
+		obtenerColumnas(tablaLocal)
+		
+		* Consultar registros externos
+		SQLEXEC(nConexion, 'SELECT * FROM ' + tablaLocal, 'tablaRemota')
+		
+		* Obtener registros desactualizados
+		SELECT &tablaLocal..* FROM (tablaLocal), tablaRemota;
+			WHERE &tablaLocal..cedula = tablaRemota.cedula;
+			AND &tablaLocal..update_at > tablaRemota.update_at
+			
+		* Actualizar registros en la tabla remota
+		DO WHILE !EOF()
+		
+			* Iterar en columnas de la tabla
+			FOR gnContador = 2 TO nCantidadColumnas
+			
+				columna = aColumnas(gnContador)
+				
+				* Salir al final de lista de columnas
+				IF EMPTY(columna)
+					EXIT
+				ENDIF
+				
+				* Convertir columna de tipo DateTime
+				IF TYPE(columna) = 'T'
+					nuevoValor = TTOC(&columna, 2)
+				ELSE
+					nuevoValor = RTRIM(&columna)
+				ENDIF
+				
+				* Construir consulta de actualizacion SQL
+				cConsulta = 'UPDATE ' + tablaLocal + ' SET ' + columna + ' = "' + nuevoValor + '" WHERE cedula = "' + cedula + '"'
+				
+				* Enviar y guardar los cambios
+				SQLEXEC(nConexion, cConsulta)
+				SQLCOMMIT(nConexion)
+				
+			ENDFOR
+			
+			SKIP
+			
+		ENDDO
+		
+	ENDFOR
+	
+ENDFUNC
+
+*
+* Extraer columnas de la tabla remota
+*
+* Retorno (void)
+*
+FUNCTION obtenerColumnas
+	LPARAMETERS tabla
+	
+	* Reestablecer variable de columnas
+	FOR gnContador = 1 TO nCantidadColumnas
+		aColumnas(gnContador) = .F.
+	ENDFOR
+	
+	* Obtener columnas del origen de datos	
+	SQLCOLUMNS(nConexion, tabla, 'FOXPRO', 'columna')
+	
+	* Guardar columnas
+	nContador = 1
+	DO WHILE !EOF()
+		aColumnas(nContador) = columna.Field_name
+		nContador = nContador + 1
+		SKIP
+	ENDDO
+
 ENDFUNC
 
 *
