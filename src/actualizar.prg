@@ -1,6 +1,3 @@
-* - Copiar registros inexistentes en tabla remota
-* - Eliminar registros inexistentes en tabla local a remota
-
 *
 * Numero de tablas a actualizar
 *
@@ -9,18 +6,26 @@
 nCantidadTablas = 1
 
 *
-* Tablas a actualizar
+* Tablas a actualizacion frecuente
 *
 * var (Array)
 *
 DECLARE aTablas (nCantidadTablas)
 
 *
+* Tablas de configuracion
+*
+* var (Array)
+*
+DECLARE aTablasConfiguracion(nCantidadTablas)
+
+
+*
 * Numero de columnas a actualizar
 *
 * var (Numerico)
 *
-nCantidadColumnas = 10
+nCantidadColumnas = 30
 
 *
 * Columnas a actualizar
@@ -28,6 +33,13 @@ nCantidadColumnas = 10
 * var (Array)
 *
 DECLARE aColumnas (nCantidadColumnas)
+
+*
+* Registro nuevo a insertar
+*
+* var (Cadena)
+*
+cRegistro = ''
 
 *
 * Identificador de conexion remota
@@ -50,7 +62,14 @@ IF NOT existenLasTablas() THEN
 	salir()
 ENDIF
 
-actualizarRegistrosRemotos()
+* Actualizar tablas de configuracion
+IF .T. THEN
+	desplegarTablasDeConfiguracion()
+* Actualizar tablas de registros
+ELSE
+	* desplegarNuevosRegistros()
+	* actualizarRegistrosRemotos()
+ENDIF
 
 salir()
 
@@ -70,8 +89,13 @@ ENDFUNC
 *
 FUNCTION obtenerTablas
 
+	aTablasConfiguracion(1) = 'planes'
+	* aTablasConfiguracion(2) = 'seccion'
+	* aTablasConfiguracion(3) = 'asignatu'
+	
 	aTablas(1) = 'datos'
-	* aTablas(2) = 'record'
+	* aTablas(2) = 'profesor'
+	* aTablas(3) = obtenerNombreDeMatriculaActual()
 	
 ENDFUNC
 
@@ -143,6 +167,88 @@ ENDFUNC
 *
 FUNCTION rellenarMarcasRestantes
 	REPLACE update_at WITH DATETIME() WHILE EMPTY(update_at)
+ENDFUNC
+
+*
+* Subir registros de configuracion
+*
+* Retorno (void)
+*
+FUNCTION desplegarTablasDeConfiguracion()
+
+	* SQLSETPROP(nConexion, "Transactions", 2)
+	
+	FOR EACH tablaLocal IN aTablasConfiguracion
+		
+		obtenerColumnas(tablaLocal)
+		
+		* Eliminar registros remotos
+		SQLEXEC(nConexion, 'DELETE FROM ' + tablaLocal)
+		
+		* Insertar registros locales
+		SELECT * FROM (tablaLocal)
+		
+		* Ingresar registros en la tabla remota
+		DO WHILE !EOF()
+		
+			obtenerDatosDelRegistros()
+		
+			* Construir consulta de actualizacion SQL
+			cConsulta = 'INSERT INTO ' + tablaLocal + ' VALUES(' + cRegistro + ')'
+			
+			* Enviar y guardar los cambios
+			SQLEXEC(nConexion, cConsulta)
+			
+			SKIP
+			* EXIT
+			
+		ENDDO
+		
+		SQLCOMMIT(nConexion)
+		
+	ENDFOR
+	
+	* SQLSETPROP(nConexion, "Transactions", 1)
+	
+ENDFUNC
+
+*
+* Subir registros nuevos de la tabla local a la remota
+*
+* Retorno (void)
+*
+FUNCTION desplegarNuevosRegistros
+
+	FOR EACH tablaLocal IN aTablas
+	
+		obtenerColumnas(tablaLocal)
+		
+		* Consultar registros externos
+		SQLEXEC(nConexion, 'SELECT * FROM ' + tablaLocal, 'tablaRemota')
+		
+		* Obtener registros en la tabla local que no existan en la remota
+		SELECT * FROM (tablaLocal); 
+		WHERE NOT EXISTS (SELECT tablaRemota.cedula FROM tablaRemota;
+		WHERE tablaRemota.cedula = &tablaLocal..cedula)
+		
+		* Ingresar registros en la tabla remota
+		DO WHILE !EOF()
+		
+			obtenerDatosDelRegistros()
+		
+			* Construir consulta de actualizacion SQL
+			cConsulta = 'INSERT INTO ' + tablaLocal + ' VALUES(' + cRegistro + ')'
+			
+			* Enviar y guardar los cambios
+			SQLEXEC(nConexion, cConsulta)
+			SQLCOMMIT(nConexion)
+			
+			SKIP
+			* EXIT
+			
+		ENDDO
+	ENDFOR
+	
 ENDFUNC
 
 *
@@ -225,6 +331,46 @@ FUNCTION obtenerColumnas
 		SKIP
 	ENDDO
 
+ENDFUNC
+
+*
+* Construir cadena CSV con los valores de las columnas requeridas
+*
+* Retorno (void)
+*
+FUNCTION obtenerDatosDelRegistros()
+
+	* Reestablecer variable de registro
+	cRegistro = 'NULL, '
+	
+	* Iterar en columnas de la tabla
+	FOR gnContador = 2 TO nCantidadColumnas
+	
+		* Obtener los nombres de la columna
+		columna = aColumnas(gnContador)
+		siguienteColumna = aColumnas(gnContador + 1)
+		
+		* Convertir el valor a cadena
+		DO CASE
+			CASE TYPE(columna) = 'T'
+				valor = '"' + DTOC(&columna) + '"'
+			CASE TYPE(columna) = 'N'
+				valor = LTRIM(STR(&columna))
+			CASE (TYPE(columna) = 'C')
+				valor = '"' + RTRIM(&columna) + '"'
+			OTHERWISE
+				valor = 'NULL'
+		ENDCASE
+		
+		* Concatenar valor del registro
+		IF EMPTY(siguienteColumna)
+			cRegistro = cRegistro + valor
+			EXIT
+		ELSE
+			cRegistro = cRegistro + valor + ','
+		ENDIF
+		
+	ENDFOR
 ENDFUNC
 
 *
