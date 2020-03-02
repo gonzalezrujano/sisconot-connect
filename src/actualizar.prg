@@ -1,23 +1,23 @@
 *
-* Numero de tablas a actualizar
-*
-* var (Numerico)
-*
-nCantidadTablas = 1
-
-*
 * Tablas a actualizacion frecuente
 *
 * var (Array)
 *
-DECLARE aTablas (nCantidadTablas)
+DECLARE aTablas (3)
+
+*
+* Campos de relacion de las tablas
+*
+* var (Array)
+*
+DECLARE aCamposRelacion (3)
 
 *
 * Tablas de configuracion
 *
 * var (Array)
 *
-DECLARE aTablasConfiguracion(nCantidadTablas)
+DECLARE aTablasConfiguracion(2)
 
 
 *
@@ -25,7 +25,7 @@ DECLARE aTablasConfiguracion(nCantidadTablas)
 *
 * var (Numerico)
 *
-nCantidadColumnas = 30
+nCantidadColumnas = 50
 
 *
 * Columnas a actualizar
@@ -63,12 +63,12 @@ IF NOT existenLasTablas() THEN
 ENDIF
 
 * Actualizar tablas de configuracion
-IF .T. THEN
+IF .F. THEN
 	desplegarTablasDeConfiguracion()
 * Actualizar tablas de registros
 ELSE
-	* desplegarNuevosRegistros()
-	* actualizarRegistrosRemotos()
+	desplegarNuevosRegistros()
+	actualizarRegistrosRemotos()
 ENDIF
 
 salir()
@@ -89,14 +89,59 @@ ENDFUNC
 *
 FUNCTION obtenerTablas
 
-	aTablasConfiguracion(1) = 'planes'
-	* aTablasConfiguracion(2) = 'seccion'
-	* aTablasConfiguracion(3) = 'asignatu'
+	aTablasConfiguracion(1) = 'seccion'
+	aTablasConfiguracion(2) = 'asignatu'
 	
 	aTablas(1) = 'datos'
-	* aTablas(2) = 'profesor'
-	* aTablas(3) = obtenerNombreDeMatriculaActual()
+	aTablas(2) = 'profesor'
+	aTablas(3) = obtenerNombreDeMatriculaActual()
 	
+	aCamposRelacion(1) = 'cedula'
+	aCamposRelacion(2) = 'cedula'
+	aCamposRelacion(3) = 'ced'
+	
+ENDFUNC
+
+*
+* Obtener nombre de la tabla de matricula del regimen
+*
+* Retorno (caracter)
+*
+FUNCTION obtenerNombreDeMatriculaActual
+
+	* DEFINIR variable de entorno e identificacion de regimen actual *
+	esRegimenDeAdultos = .T.
+	
+	IF (esRegimenDeAdultos) THEN
+		cTabla = 'MA' + obtenerLapso()
+	ENDIF
+	
+	RETURN cTabla
+	
+ENDFUNC
+
+*
+* Obtener numero de lapso del periodo (01/02)
+*
+* Retorno (caracter)
+*
+FUNCTION obtenerLapso()
+
+	nMesActual = MONTH(DATE())
+	
+	* Se encuentra en el Lapso 2 (Entre Marzo y Agosto)
+	IF (nMesActual >= 3 AND nMesActual <= 7) THEN
+		cPeriodo = '02'
+		cAnio    = LTRIM(STR((YEAR(DATE()) - 1)))
+	* Se encuentra en el Lapso 1 (Entre Septiembre y Febrero)
+	ELSE
+		cPeriodo = '01'
+		cAnio    = LTRIM(STR(YEAR(DATE())))
+	ENDIF
+	
+	cLapso = cPeriodo + cAnio
+	
+	RETURN '012017'
 ENDFUNC
 
 *
@@ -219,6 +264,8 @@ ENDFUNC
 *
 FUNCTION desplegarNuevosRegistros
 
+	nCont = 1
+
 	FOR EACH tablaLocal IN aTablas
 	
 		obtenerColumnas(tablaLocal)
@@ -226,10 +273,12 @@ FUNCTION desplegarNuevosRegistros
 		* Consultar registros externos
 		SQLEXEC(nConexion, 'SELECT * FROM ' + tablaLocal, 'tablaRemota')
 		
+		cCampoRelacion = aCamposRelacion(nCont)
+		
 		* Obtener registros en la tabla local que no existan en la remota
 		SELECT * FROM (tablaLocal); 
-		WHERE NOT EXISTS (SELECT tablaRemota.cedula FROM tablaRemota;
-		WHERE tablaRemota.cedula = &tablaLocal..cedula)
+		WHERE NOT EXISTS (SELECT tablaRemota.&cCampoRelacion FROM tablaRemota;
+		WHERE tablaRemota.&cCampoRelacion = &tablaLocal..&cCampoRelacion)
 		
 		* Ingresar registros en la tabla remota
 		DO WHILE !EOF()
@@ -244,9 +293,11 @@ FUNCTION desplegarNuevosRegistros
 			SQLCOMMIT(nConexion)
 			
 			SKIP
-			* EXIT
 			
 		ENDDO
+		
+		nCont = nCont + 1
+		
 	ENDFOR
 	
 ENDFUNC
@@ -258,6 +309,8 @@ ENDFUNC
 *
 FUNCTION actualizarRegistrosRemotos
 
+	nCont = 1
+
 	FOR EACH tablaLocal IN aTablas
 		
 		obtenerColumnas(tablaLocal)
@@ -265,9 +318,11 @@ FUNCTION actualizarRegistrosRemotos
 		* Consultar registros externos
 		SQLEXEC(nConexion, 'SELECT * FROM ' + tablaLocal, 'tablaRemota')
 		
+		cCampoRelacion = aCamposRelacion(nCont)
+		
 		* Obtener registros desactualizados
 		SELECT &tablaLocal..* FROM (tablaLocal), tablaRemota;
-			WHERE &tablaLocal..cedula = tablaRemota.cedula;
+			WHERE &tablaLocal..&cCampoRelacion = tablaRemota.&cCampoRelacion;
 			AND &tablaLocal..update_at > tablaRemota.update_at
 			
 		* Actualizar registros en la tabla remota
@@ -302,6 +357,8 @@ FUNCTION actualizarRegistrosRemotos
 			SKIP
 			
 		ENDDO
+		
+		nCont = nCont + 1
 		
 	ENDFOR
 	
