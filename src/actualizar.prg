@@ -17,7 +17,7 @@ DECLARE aCamposRelacion (3)
 *
 * var (Array)
 *
-DECLARE aTablasConfiguracion(2)
+DECLARE aTablasConfiguracion(3)
 
 
 *
@@ -63,7 +63,7 @@ IF NOT existenLasTablas() THEN
 ENDIF
 
 * Actualizar tablas de configuracion
-IF .F. THEN
+IF .T. THEN
 	desplegarTablasDeConfiguracion()
 * Actualizar tablas de registros
 ELSE
@@ -89,8 +89,9 @@ ENDFUNC
 *
 FUNCTION obtenerTablas
 
-	aTablasConfiguracion(1) = 'seccion'
-	aTablasConfiguracion(2) = 'asignatu'
+	aTablasConfiguracion(1) = 'planes'
+	aTablasConfiguracion(2) = 'seccion'
+	aTablasConfiguracion(3) = 'asignatu'
 	
 	aTablas(1) = 'datos'
 	aTablas(2) = 'profesor'

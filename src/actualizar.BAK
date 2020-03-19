@@ -264,7 +264,7 @@ ENDFUNC
 *
 FUNCTION desplegarNuevosRegistros
 
-	nCount = 1
+	nCont = 1
 
 	FOR EACH tablaLocal IN aTablas
 	
@@ -273,7 +273,7 @@ FUNCTION desplegarNuevosRegistros
 		* Consultar registros externos
 		SQLEXEC(nConexion, 'SELECT * FROM ' + tablaLocal, 'tablaRemota')
 		
-		cCampoRelacion = aCamposRelacion(nCount)
+		cCampoRelacion = aCamposRelacion(nCont)
 		
 		* Obtener registros en la tabla local que no existan en la remota
 		SELECT * FROM (tablaLocal); 
@@ -296,7 +296,7 @@ FUNCTION desplegarNuevosRegistros
 			
 		ENDDO
 		
-		nCount = nCount + 1
+		nCont = nCont + 1
 		
 	ENDFOR
 	
@@ -309,6 +309,8 @@ ENDFUNC
 *
 FUNCTION actualizarRegistrosRemotos
 
+	nCont = 1
+
 	FOR EACH tablaLocal IN aTablas
 		
 		obtenerColumnas(tablaLocal)
@@ -316,9 +318,11 @@ FUNCTION actualizarRegistrosRemotos
 		* Consultar registros externos
 		SQLEXEC(nConexion, 'SELECT * FROM ' + tablaLocal, 'tablaRemota')
 		
+		cCampoRelacion = aCamposRelacion(nCont)
+		
 		* Obtener registros desactualizados
 		SELECT &tablaLocal..* FROM (tablaLocal), tablaRemota;
-			WHERE &tablaLocal..cedula = tablaRemota.cedula;
+			WHERE &tablaLocal..&cCampoRelacion = tablaRemota.&cCampoRelacion;
 			AND &tablaLocal..update_at > tablaRemota.update_at
 			
 		* Actualizar registros en la tabla remota
@@ -353,6 +357,8 @@ FUNCTION actualizarRegistrosRemotos
 			SKIP
 			
 		ENDDO
+		
+		nCont = nCont + 1
 		
 	ENDFOR
 	
